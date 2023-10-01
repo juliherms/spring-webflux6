@@ -13,6 +13,12 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 
+/**
+ * For functional programming do not use traditional try catch
+ * .OnErrorReturn
+ * .onErrorResume
+ * .onErrorMap, catch current exception and dispatch another(custom exception)
+ */
 @Service
 @Slf4j
 @AllArgsConstructor
@@ -36,7 +42,7 @@ public class StocksService {
     public Flux<StockResponse> getAllStocks(BigDecimal priceGreaterThan) {
         return stocksRepository.findAll()
                 .filter(stock ->
-                        stock.getPrice().compareTo(priceGreaterThan) > 0)
+                        stock.getPrice().compareTo(priceGreaterThan) > 0) // Filter example
                 .map(StockResponse::fromModel)
                 .doFirst(() -> log.info("Retrieving all stocks"))
                 .doOnNext(stock -> log.info("Stock found: {}", stock))

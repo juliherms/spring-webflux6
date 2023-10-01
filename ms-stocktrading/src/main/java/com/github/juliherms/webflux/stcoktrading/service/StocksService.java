@@ -1,5 +1,6 @@
 package com.github.juliherms.webflux.stcoktrading.service;
 
+import com.github.juliherms.webflux.stcoktrading.client.StockMarketClient;
 import com.github.juliherms.webflux.stcoktrading.dto.StockRequest;
 import com.github.juliherms.webflux.stcoktrading.dto.StockResponse;
 import com.github.juliherms.webflux.stcoktrading.exception.StockCreationException;
@@ -26,9 +27,19 @@ public class StocksService {
 
     private StocksRepository stocksRepository;
 
-    public Mono<StockResponse> getOneStock(String id) {
+    private StockMarketClient stockMarketClient;
+
+    public Mono<StockResponse> getOneStock(String id, String currency) {
         return stocksRepository.findById(id)
-                .map(StockResponse::fromModel)
+                .flatMap(stock -> stockMarketClient.getCurrencyRates()
+                        .filter(currencyRateResponse -> currency.equalsIgnoreCase(currencyRateResponse.getCurrencyName())) //filter data from api
+                        .singleOrEmpty()
+                        .map(currencyRateResponse -> StockResponse.builder()
+                                .id(stock.getId())
+                                .name(stock.getName())
+                                .currency(currencyRateResponse.getCurrencyName())
+                                .price(stock.getPrice().multiply(currencyRateResponse.getRate()))
+                                .build()))
                 .switchIfEmpty(Mono.error(
                         new StockNotFoundException(
                                 "Stock not found with id: " + id)))

@@ -18,8 +18,9 @@ public class StocksController {
     private StocksService stocksService;
 
     @GetMapping("/{id}")
-    public Mono<StockResponse> getOneStock(@PathVariable String id) {
-        return stocksService.getOneStock(id);
+    public Mono<StockResponse> getOneStock(@PathVariable String id,
+                                           @RequestParam(value = "currency", defaultValue = "USD") String currency) {
+        return stocksService.getOneStock(id, currency);
     }
 
     @GetMapping

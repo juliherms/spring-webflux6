@@ -3,12 +3,14 @@ package com.github.juliherms.webflux.stcoktrading.service;
 import com.github.juliherms.webflux.stcoktrading.client.StockMarketClient;
 import com.github.juliherms.webflux.stcoktrading.dto.StockRequest;
 import com.github.juliherms.webflux.stcoktrading.dto.StockResponse;
+import com.github.juliherms.webflux.stcoktrading.dto.client.StockPublishRequest;
 import com.github.juliherms.webflux.stcoktrading.exception.StockCreationException;
 import com.github.juliherms.webflux.stcoktrading.exception.StockNotFoundException;
 import com.github.juliherms.webflux.stcoktrading.repository.StocksRepository;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -62,11 +64,36 @@ public class StocksService {
                 .doFinally(signalType -> log.info("Finalized retrieving stock with signal type: {}", signalType));
     }
 
+    /**
+     * This method response to save stock in the database and publish information to market service
+     * Transaction responsible to verify any errors to call another service
+     * @param stockRequest
+     * @return
+     */
+    @Transactional
     public Mono<StockResponse> createStock(StockRequest stockRequest) {
         return Mono.just(stockRequest)
                 .map(StockRequest::toModel)
-                .flatMap(stock -> stocksRepository.save(stock))
-                .map(StockResponse::fromModel)
+                .flatMap(stock -> stocksRepository.save(stock)) //save object in database
+                .flatMap(stock -> stockMarketClient.publishStock(generateStockPublishRequest(stockRequest))//public data to another service
+                        .filter(stockPublishResponse ->
+                                "SUCCESS".equalsIgnoreCase(stockPublishResponse.getStatus()))
+                        .map(stockPublishResponse ->  StockResponse.fromModel(stock))
+                        .switchIfEmpty(Mono.error(
+                                new StockCreationException("Unable to publish stock to the Stock Market"))))
                 .onErrorMap(ex -> new StockCreationException(ex.getMessage()));
+    }
+
+    /**
+     * Convert StockRequest to StockPublishRequest
+     * @param stockRequest
+     * @return
+     */
+    private StockPublishRequest generateStockPublishRequest(StockRequest stockRequest) {
+        return StockPublishRequest.builder()
+                .stockName(stockRequest.getName())
+                .price(stockRequest.getPrice())
+                .currencyName(stockRequest.getCurrency())
+                .build();
     }
 }
